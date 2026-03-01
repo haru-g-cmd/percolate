@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Percolate — Infrastructure Resilience Platform</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Top Bar -->
+  <header id="topbar">
+    <div class="logo">
+      <span class="logo-icon">&#9672;</span>
+      <span class="logo-text">PERCOLATE</span>
+      <span class="logo-sub">resilience platform</span>
+    </div>
+    <div class="controls">
+      <select id="topology-select"><option value="">Load topology...</option></select>
+      <div class="sim-controls">
+        <button id="btn-play" title="Start">&#9654;</button>
+        <button id="btn-pause" title="Pause" disabled>&#9208;</button>
+        <button id="btn-reset" title="Reset">&#10226;</button>
+        <div class="speed-control">
+          <label>Speed</label>
+          <input type="range" id="speed-slider" min="0.25" max="4" step="0.25" value="1">
+          <span id="speed-label">1&times;</span>
+        </div>
+      </div>
+    </div>
+    <div class="top-metrics">
+      <div class="metric-badge" id="resilience-badge">
+        <span class="metric-label">Resilience</span>
+        <span class="metric-value" id="resilience-score">&mdash;</span>
+      </div>
+      <div class="metric-badge financial" id="financial-badge">
+        <span class="metric-label">Revenue Impact</span>
+        <span class="metric-value" id="financial-impact">$0</span>
+        <span class="metric-sub">/min</span>
+      </div>
+      <div class="metric-badge" id="health-badge">
+        <span class="metric-label">Avg Health</span>
+        <span class="metric-value" id="overall-health">&mdash;</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="canvas-container">
+      <canvas id="network-canvas"></canvas>
+      <div id="canvas-overlay">
+        <div id="tooltip" class="hidden"></div>
+      </div>
+    </div>
+
+    <aside id="right-panel">
+      <div class="panel-tabs">
+        <button class="tab active" data-tab="details">Details</button>
+        <button class="tab" data-tab="scenarios">Scenarios</button>
+        <button class="tab" data-tab="analysis">Analysis</button>
+      </div>
+
+      <div id="tab-details" class="tab-content active">
+        <div id="no-selection" class="placeholder">
+          <div class="placeholder-icon">&#9678;</div>
+          <p>Click a node to inspect</p>
+          <p class="placeholder-sub">Right-click to inject failure</p>
+        </div>
+        <div id="node-detail" class="hidden">
+          <div class="detail-header">
+            <div>
+              <h3 id="detail-name"></h3>
+              <span id="detail-type" class="badge"></span>
+              <span id="detail-failure-badge" class="badge danger hidden"></span>
+            </div>
+            <span id="detail-status" class="status-dot"></span>
+          </div>
+          <div class="detail-metrics">
+            <div class="mini-metric"><span class="mm-label">Health</span><div class="mm-bar"><div id="dm-health" class="mm-fill"></div></div><span id="dm-health-val" class="mm-val"></span></div>
+            <div class="mini-metric"><span class="mm-label">Load</span><div class="mm-bar"><div id="dm-load" class="mm-fill load"></div></div><span id="dm-load-val" class="mm-val"></span></div>
+            <div class="mini-metric"><span class="mm-label">Latency</span><span id="dm-latency" class="mm-val-lg"></span></div>
+            <div class="mini-metric"><span class="mm-label">Error Rate</span><span id="dm-error" class="mm-val-lg"></span></div>
+            <div class="mini-metric"><span class="mm-label">Throughput</span><span id="dm-throughput" class="mm-val-lg"></span></div>
+          </div>
+          <div class="detail-section">
+            <h4>&#9960; Resilience Patterns</h4>
+            <div id="resilience-toggles"></div>
+          </div>
+          <div class="detail-section">
+            <h4>&#128165; Inject Failure</h4>
+            <div id="failure-buttons"></div>
+          </div>
+          <button id="btn-heal" class="btn-heal hidden">Heal Node</button>
+        </div>
+      </div>
+
+      <div id="tab-scenarios" class="tab-content">
+        <h4>Failure Scenarios</h4>
+        <p class="tab-desc">Pre-built incident simulations. Click to load and auto-run.</p>
+        <div id="scenario-list"></div>
+      </div>
+
+      <div id="tab-analysis" class="tab-content">
+        <h4>Resilience Score Breakdown</h4>
+        <div id="score-breakdown"></div>
+        <h4>Recommendations</h4>
+        <div id="recommendations-list"></div>
+        <button id="btn-save-sim" class="btn-primary">Save Simulation Report</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer id="bottom-bar">
+    <div id="event-feed">
+      <div class="feed-header"><span>Event Feed</span><span id="tick-counter">Tick: 0</span></div>
+      <div id="events-scroll"></div>
+    </div>
+    <div id="metrics-chart">
+      <canvas id="metrics-canvas"></canvas>
+    </div>
+  </footer>
+
+  <div id="context-menu" class="hidden">
+    <div class="ctx-header"></div>
+    <div class="ctx-items"></div>
+  </div>
+
+  <script src="/js/renderer.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
