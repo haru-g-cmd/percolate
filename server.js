@@ -12,14 +12,19 @@ const { SimulationManager } = require('./src/simulation/engine');
 // ---------------------------------------------------------------------------
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'client', 'dist')));
 app.use('/api', apiRoutes);
+
+// SPA catch-all: serve index.html for any non-API route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'client', 'dist', 'index.html'));
+});
 
 // ---------------------------------------------------------------------------
 // HTTP + WebSocket server
 // ---------------------------------------------------------------------------
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, path: '/ws' });
 
 wss.on('connection', (ws) => {
   console.log('WebSocket client connected');
@@ -106,6 +111,20 @@ wss.on('connection', (ws) => {
         case 'set_speed': {
           sim.setSpeed(msg.speed);
           ws.send(JSON.stringify({ type: 'speed_changed', data: { speed: sim.speed } }));
+          break;
+        }
+
+        // -- Toggle chaos mode --------------------------------------------
+        case 'toggle_chaos': {
+          sim.toggleChaos();
+          ws.send(JSON.stringify({ type: 'chaos_toggled', data: sim.getState() }));
+          break;
+        }
+
+        // -- Set chaos interval -------------------------------------------
+        case 'set_chaos_interval': {
+          sim.setChaosInterval(msg.interval);
+          ws.send(JSON.stringify({ type: 'chaos_interval_set', data: sim.getState() }));
           break;
         }
 

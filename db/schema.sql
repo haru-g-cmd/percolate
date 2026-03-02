@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS failure_modes (
     name              VARCHAR(100) NOT NULL,
     slug              VARCHAR(100) NOT NULL UNIQUE,
     description       TEXT,
-    icon              VARCHAR(10) DEFAULT '💥',
+    icon              VARCHAR(10) DEFAULT '',
     propagation_type  ENUM('immediate','gradual','threshold') NOT NULL,
     default_severity  FLOAT DEFAULT 0.5,
     health_impact     FLOAT DEFAULT 50 COMMENT 'How much health drops per tick',

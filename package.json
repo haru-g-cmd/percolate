@@ -1,7 +1,7 @@
 {
   "name": "percolate",
   "version": "1.0.0",
-  "description": "Infrastructure Resilience Testing Platform — Model, break, and harden your systems before production does it for you.",
+  "description": "Infrastructure resilience testing platform. Model, break, and harden distributed systems.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

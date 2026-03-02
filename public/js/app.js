@@ -1,5 +1,5 @@
 /* ===================================================================
-   PERCOLATE — Main Application
+   PERCOLATE - Main Application
    WebSocket client, UI orchestration, event handling
    =================================================================== */
 

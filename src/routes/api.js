@@ -3,7 +3,19 @@ const router = express.Router();
 const pool = require('../models/db');
 
 // ---------------------------------------------------------------------------
-// GET /topologies — list all topologies
+// GET /health  - health check
+// ---------------------------------------------------------------------------
+router.get('/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok', uptime: process.uptime() });
+  } catch {
+    res.status(503).json({ status: 'error', message: 'Database unavailable' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /topologies  - list all topologies
 // ---------------------------------------------------------------------------
 router.get('/topologies', async (req, res) => {
   try {
@@ -18,7 +30,7 @@ router.get('/topologies', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /topologies/:id — full topology with nodes and edges
+// GET /topologies/:id  - full topology with nodes and edges
 // ---------------------------------------------------------------------------
 router.get('/topologies/:id', async (req, res) => {
   try {
@@ -52,7 +64,23 @@ router.get('/topologies/:id', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /topologies/:id/scenarios — scenarios for a topology
+// GET /topologies/:id/stats  - node, edge, simulation counts
+// ---------------------------------------------------------------------------
+router.get('/topologies/:id/stats', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [nodes] = await pool.query('SELECT COUNT(*) as nodeCount FROM nodes WHERE topology_id = ?', [id]);
+    const [edges] = await pool.query('SELECT COUNT(*) as edgeCount FROM edges WHERE topology_id = ?', [id]);
+    const [sims] = await pool.query('SELECT COUNT(*) as simCount FROM simulations WHERE topology_id = ?', [id]);
+    res.json({ nodeCount: nodes[0].nodeCount, edgeCount: edges[0].edgeCount, simCount: sims[0].simCount });
+  } catch (err) {
+    console.error(`GET /topologies/${req.params.id}/stats error:`, err.message);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /topologies/:id/scenarios  - scenarios for a topology
 // ---------------------------------------------------------------------------
 router.get('/topologies/:id/scenarios', async (req, res) => {
   try {
@@ -66,7 +94,7 @@ router.get('/topologies/:id/scenarios', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /failure-modes — all failure modes
+// GET /failure-modes  - all failure modes
 // ---------------------------------------------------------------------------
 router.get('/failure-modes', async (req, res) => {
   try {
@@ -79,7 +107,7 @@ router.get('/failure-modes', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /simulations — save a completed simulation
+// POST /simulations  - save a completed simulation
 // ---------------------------------------------------------------------------
 router.post('/simulations', async (req, res) => {
   const conn = await pool.getConnection();
@@ -149,7 +177,7 @@ router.post('/simulations', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /simulations — list last 20 simulations with topology name
+// GET /simulations  - list last 20 simulations with topology name
 // ---------------------------------------------------------------------------
 router.get('/simulations', async (req, res) => {
   try {
@@ -168,7 +196,7 @@ router.get('/simulations', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /simulations/:id — full simulation with events and recommendations
+// GET /simulations/:id  - full simulation with events and recommendations
 // ---------------------------------------------------------------------------
 router.get('/simulations/:id', async (req, res) => {
   try {

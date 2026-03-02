@@ -51,6 +51,14 @@ class SimulationManager {
     // Active scenario
     this.activeScenario = null;
 
+    // Chaos mode
+    this.chaosMode = false;
+    this.chaosInterval = 30;  // 1/chaosInterval chance per tick
+
+    // MTTR / MTTF tracking
+    this.failureTimestamps = [];
+    this.recoveryTimestamps = [];
+
     // Event log (ring buffer, last 50)
     this.events = [];
     this.maxEvents = 50;
@@ -128,6 +136,8 @@ class SimulationManager {
     this.events = [];
     this.metrics = [];
     this.activeScenario = null;
+    this.failureTimestamps = [];
+    this.recoveryTimestamps = [];
 
     for (const n of this.dbNodes) {
       const config = typeof n.config === 'string' ? JSON.parse(n.config) : (n.config || {});
@@ -310,6 +320,47 @@ class SimulationManager {
   }
 
   // -----------------------------------------------------------------------
+  // Chaos mode controls
+  // -----------------------------------------------------------------------
+
+  toggleChaos() {
+    this.chaosMode = !this.chaosMode;
+    this._addEvent('chaos_toggled', null, { chaosMode: this.chaosMode, chaosInterval: this.chaosInterval });
+    return this.getState();
+  }
+
+  setChaosInterval(n) {
+    this.chaosInterval = Math.max(1, Math.floor(Number(n) || 30));
+    this._addEvent('chaos_interval_changed', null, { chaosInterval: this.chaosInterval });
+    return this.getState();
+  }
+
+  _processChaos() {
+    if (!this.chaosMode || this.failureModes.length === 0) return;
+
+    if (Math.random() < 1 / this.chaosInterval) {
+      // Collect healthy nodes (no active failure)
+      const healthyNodes = [];
+      for (const [key, node] of this.nodeStates) {
+        if (!node.failureMode && node.status === 'healthy') {
+          healthyNodes.push(key);
+        }
+      }
+      if (healthyNodes.length === 0) return;
+
+      const targetKey = healthyNodes[Math.floor(Math.random() * healthyNodes.length)];
+      const fm = this.failureModes[Math.floor(Math.random() * this.failureModes.length)];
+
+      this._addEvent('chaos_injection', targetKey, {
+        failureMode: fm.slug,
+        name: fm.name
+      });
+
+      this.injectFailure(targetKey, fm.slug);
+    }
+  }
+
+  // -----------------------------------------------------------------------
   // Tick processing
   // -----------------------------------------------------------------------
 
@@ -326,6 +377,9 @@ class SimulationManager {
 
     // 1. Process scenario events for this tick
     this._processScenarioTick();
+
+    // 1.5. Chaos mode: randomly inject failures
+    this._processChaos();
 
     // 2. Apply active failure effects to each node
     this._applyFailureEffects();
@@ -448,6 +502,8 @@ class SimulationManager {
       if (prevStatus !== node.status) {
         if (node.status === 'failed') {
           this._addEvent('node_failed', node.key, { failureMode: node.failureMode, ticksActive: node.failureTicksActive });
+          // MTTR/MTTF: record failure timestamp
+          this.failureTimestamps.push({ nodeKey: node.key, tick: this.tick });
         } else if (node.status === 'degraded' && prevStatus === 'healthy') {
           this._addEvent('node_degraded', node.key, { health: Math.round(node.health) });
         } else if (node.status === 'failing') {
@@ -534,7 +590,7 @@ class SimulationManager {
       }
     }
 
-    // Cap total mitigation at 80% — at least 20% of impact always gets through
+    // Cap total mitigation at 80%, at least 20% of impact always gets through
     const minImpact = impact * 0.20;
     return Math.max(mitigated, minImpact);
   }
@@ -587,6 +643,12 @@ class SimulationManager {
       const prevStatus = node.status;
       node.status = statusFromHealth(node.health, node.isRecovering);
       if (prevStatus !== node.status) {
+        // MTTR/MTTF: record recovery timestamp when transitioning from failed/failing
+        if ((prevStatus === 'failed' || prevStatus === 'failing') &&
+            (node.status === 'recovering' || node.status === 'healthy')) {
+          this.recoveryTimestamps.push({ nodeKey: key, tick: this.tick });
+        }
+
         if (node.status === 'healthy' && prevStatus !== 'healthy') {
           this._addEvent('recovery_completed', key, { health: Math.round(node.health) });
         } else if (node.isRecovering && prevStatus === 'failed') {
@@ -825,6 +887,70 @@ class SimulationManager {
   }
 
   // -----------------------------------------------------------------------
+  // MTTR / MTTF reliability metrics
+  // -----------------------------------------------------------------------
+
+  getReliabilityMetrics() {
+    let totalRecoveryTime = 0;
+    let recoveryCount = 0;
+    let totalTimeBetweenFailures = 0;
+    let mttfCount = 0;
+
+    // MTTR: for each recovery, find the most recent prior failure for the same node
+    for (const recovery of this.recoveryTimestamps) {
+      // Find the latest failure for this node that happened before this recovery
+      let latestFailure = null;
+      for (const failure of this.failureTimestamps) {
+        if (failure.nodeKey === recovery.nodeKey && failure.tick < recovery.tick) {
+          if (!latestFailure || failure.tick > latestFailure.tick) {
+            latestFailure = failure;
+          }
+        }
+      }
+      if (latestFailure) {
+        totalRecoveryTime += recovery.tick - latestFailure.tick;
+        recoveryCount++;
+      }
+    }
+
+    // MTTF: for each failure, find the most recent prior recovery for the same node
+    for (const failure of this.failureTimestamps) {
+      let latestRecovery = null;
+      for (const recovery of this.recoveryTimestamps) {
+        if (recovery.nodeKey === failure.nodeKey && recovery.tick < failure.tick) {
+          if (!latestRecovery || recovery.tick > latestRecovery.tick) {
+            latestRecovery = recovery;
+          }
+        }
+      }
+      if (latestRecovery) {
+        totalTimeBetweenFailures += failure.tick - latestRecovery.tick;
+        mttfCount++;
+      }
+    }
+
+    return {
+      mttr: recoveryCount > 0 ? Math.round((totalRecoveryTime / recoveryCount) * 100) / 100 : 0,
+      mttf: mttfCount > 0 ? Math.round((totalTimeBetweenFailures / mttfCount) * 100) / 100 : 0
+    };
+  }
+
+  // -----------------------------------------------------------------------
+  // Blast radius
+  // -----------------------------------------------------------------------
+
+  calculateBlastRadius() {
+    const nodes = Array.from(this.nodeStates.values());
+    if (nodes.length === 0) return 0;
+
+    const affected = nodes.filter(
+      n => n.status === 'degraded' || n.status === 'failing' || n.status === 'failed'
+    ).length;
+
+    return Math.round((affected / nodes.length) * 10000) / 100; // percentage with 2 decimals
+  }
+
+  // -----------------------------------------------------------------------
   // Event logging
   // -----------------------------------------------------------------------
 
@@ -872,6 +998,8 @@ class SimulationManager {
 
     const resilienceScore = this.calculateResilienceScore();
     const financialImpact = this.calculateFinancialImpact();
+    const reliabilityMetrics = this.getReliabilityMetrics();
+    const blastRadius = this.calculateBlastRadius();
 
     return {
       topology: this.topology ? {
@@ -912,6 +1040,10 @@ class SimulationManager {
       resilienceScore: resilienceScore.score,
       resilienceBreakdown: resilienceScore.breakdown,
       financialImpact,
+      chaosMode: this.chaosMode,
+      mttr: reliabilityMetrics.mttr,
+      mttf: reliabilityMetrics.mttf,
+      blastRadius,
       failureModes: this.failureModes.map(fm => ({
         id: fm.id,
         name: fm.name,

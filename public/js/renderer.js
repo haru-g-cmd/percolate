@@ -1,5 +1,5 @@
 /* ===================================================================
-   PERCOLATE — Canvas Rendering Engine
+   PERCOLATE - Canvas Rendering Engine
    Draws the network topology, particles, shockwaves, and handles
    mouse interaction hit-testing.
    =================================================================== */
